@@ -7714,6 +7714,44 @@ function startSplashCanvasAnim() {
 }
 
 
+let pendingQuoteText = null;
+
+function speakQuote(text) {
+  pendingQuoteText = text;
+  try {
+    if (!('speechSynthesis' in window)) return;
+    speechSynthesis.cancel();
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang = 'id-ID';
+    utter.rate = 0.95;
+    utter.pitch = 1;
+    utter.volume = 1;
+    utter.onstart = () => { pendingQuoteText = null; };
+    // Coba pakai voice Indonesia kalau ada
+    const setVoice = () => {
+      const voices = speechSynthesis.getVoices();
+      const idVoice = voices.find(v => v.lang === 'id-ID') || voices.find(v => v.lang && v.lang.startsWith('id'));
+      if (idVoice) utter.voice = idVoice;
+      speechSynthesis.speak(utter);
+    };
+    if (speechSynthesis.getVoices().length) {
+      setVoice();
+    } else {
+      speechSynthesis.onvoiceschanged = setVoice;
+    }
+  } catch (e) { /* diam-diam gagal, jangan ganggu splash */ }
+}
+
+// Cadangan: kalau browser blokir suara otomatis (belum ada sentuhan user),
+// begitu layar disentuh sekali, suara langsung dicoba lagi.
+function retrySpeechOnTouch() {
+  if (pendingQuoteText && 'speechSynthesis' in window) {
+    speakQuote(pendingQuoteText);
+  }
+}
+document.addEventListener('touchstart', retrySpeechOnTouch, { once: true, passive: true });
+document.addEventListener('click', retrySpeechOnTouch, { once: true });
+
 function initSplash() {
   const overlay  = document.getElementById('splash-overlay');
   const quoteEl  = document.getElementById('splash-quote');
@@ -7726,6 +7764,9 @@ function initSplash() {
   const q = QUOTES[Math.floor(Math.random() * QUOTES.length)];
   if (quoteEl)  quoteEl.textContent  = '"' + q.q + '"';
   if (authorEl) authorEl.textContent = q.a;
+
+  // Bacain quote pakai suara (text-to-speech bawaan Android, tanpa file audio)
+  speakQuote(q.q);
 
   // Generate battery segments
   const TOTAL_SEGMENTS = 20;
@@ -7770,6 +7811,7 @@ function initSplash() {
 
 function closeSplash() {
   clearTimeout(splashTimer);
+  if ('speechSynthesis' in window) speechSynthesis.cancel();
   if (splashCanvasAnim) cancelAnimationFrame(splashCanvasAnim);
   if (splashPctInterval) cancelAnimationFrame(splashPctInterval);
   const rgbLine = document.getElementById('rgb-line');
