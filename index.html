@@ -7723,8 +7723,8 @@ function speakQuote(text) {
     speechSynthesis.cancel();
     const utter = new SpeechSynthesisUtterance(text);
     utter.lang = 'id-ID';
-    utter.rate = 0.95;
-    utter.pitch = 1;
+    utter.rate = 0.85;   // pelan, mengalir, nggak terburu-buru
+    utter.pitch = 1.08;  // agak naik dikit biar hangat & lembut
     utter.volume = 1;
     utter.onstart = () => { pendingQuoteText = null; };
     // Coba pakai voice Indonesia kalau ada
