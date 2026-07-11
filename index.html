@@ -7714,49 +7714,38 @@ function startSplashCanvasAnim() {
 }
 
 
-let pendingQuoteText = null;
+// Quote yang punya rekaman MP3 (baru 3 dari 15 rencana -- nambah nanti tinggal isi array ini)
+const AUDIO_QUOTES = [
+  { q: "Disiplin adalah jembatan antara tujuan dan pencapaian.", audio: "audio/quote-01.mp3" },
+  { q: "Trader sukses bukan yang tidak pernah rugi, tapi yang bangkit setiap kali rugi.", audio: "audio/quote-02.mp3" },
+  { q: "Pasar tidak peduli perasaanmu. Ikuti rencana, bukan emosi.", audio: "audio/quote-03.mp3" }
+];
 
-function doSpeakNow(text) {
-  const utter = new SpeechSynthesisUtterance(text);
-  utter.lang = 'id-ID';
-  utter.rate = 0.87;   // pelan & mengalir, kesan lembut
-  utter.pitch = 0.95;  // sedikit di bawah normal, kesan tegas/berwibawa
-  utter.volume = 1;
-  utter.onstart = () => { pendingQuoteText = null; };
-  const voices = speechSynthesis.getVoices();
-  const idVoice = voices.find(v => v.lang === 'id-ID') || voices.find(v => v.lang && v.lang.startsWith('id'));
-  if (idVoice) utter.voice = idVoice;
-  speechSynthesis.speak(utter);
-}
+let pendingAudioSrc = null;
+let currentAudioEl = null;
 
-function speakQuote(text) {
-  pendingQuoteText = text;
+function playAudioNow(src) {
   try {
-    if (!('speechSynthesis' in window)) return;
-    speechSynthesis.cancel();
-    // Jeda dikit setelah cancel() sebelum speak() -- Chrome Android
-    // kadang "nelen" suara kalau speak() dipanggil langsung setelah cancel().
-    // Ini cuma buat percobaan OTOMATIS (bukan hasil sentuhan user).
-    setTimeout(() => {
-      if (speechSynthesis.getVoices().length) {
-        doSpeakNow(text);
-      } else {
-        speechSynthesis.onvoiceschanged = () => doSpeakNow(text);
-      }
-    }, 120);
+    if (currentAudioEl) { currentAudioEl.pause(); currentAudioEl = null; }
+    const audio = new Audio(src);
+    audio.volume = 1;
+    audio.onplay = () => { pendingAudioSrc = null; };
+    currentAudioEl = audio;
+    const p = audio.play();
+    if (p && p.catch) p.catch(() => { /* diblokir, nanti dicoba lagi pas disentuh */ });
   } catch (e) { /* diam-diam gagal, jangan ganggu splash */ }
 }
 
-// Cadangan: kalau browser blokir suara otomatis (belum ada sentuhan user),
-// begitu layar disentuh, suara langsung diputar SAAT ITU JUGA (tanpa jeda),
-// supaya "izin" dari sentuhan user nggak keburu hilang.
+function speakQuote(src) {
+  pendingAudioSrc = src;
+  playAudioNow(src);
+}
+
+// Cadangan: kalau browser blokir audio otomatis (belum ada sentuhan user),
+// begitu layar disentuh, audio langsung diputar SAAT ITU JUGA.
 function retrySpeechOnTouch() {
-  if (pendingQuoteText && 'speechSynthesis' in window) {
-    const text = pendingQuoteText;
-    try {
-      speechSynthesis.cancel();
-      doSpeakNow(text);
-    } catch (e) { /* abaikan */ }
+  if (pendingAudioSrc) {
+    playAudioNow(pendingAudioSrc);
   }
 }
 document.addEventListener('touchstart', retrySpeechOnTouch, { passive: true });
@@ -7771,21 +7760,21 @@ function initSplash() {
   const pctEl    = document.getElementById('splash-progress-text');
   if (!overlay) return;
 
-  // Pick random quote
-  let qIdx = Math.floor(Math.random() * QUOTES.length);
+  // Pick random quote (sementara dari AUDIO_QUOTES yang udah ada rekamannya)
+  let qIdx = Math.floor(Math.random() * AUDIO_QUOTES.length);
   try {
     const lastIdx = parseInt(localStorage.getItem('oni_last_quote_idx'), 10);
-    if (!isNaN(lastIdx) && QUOTES.length > 1) {
-      while (qIdx === lastIdx) qIdx = Math.floor(Math.random() * QUOTES.length);
+    if (!isNaN(lastIdx) && AUDIO_QUOTES.length > 1) {
+      while (qIdx === lastIdx) qIdx = Math.floor(Math.random() * AUDIO_QUOTES.length);
     }
     localStorage.setItem('oni_last_quote_idx', qIdx);
   } catch (e) { /* localStorage nggak tersedia, lanjut aja pakai random biasa */ }
-  const q = QUOTES[qIdx];
+  const q = AUDIO_QUOTES[qIdx];
   if (quoteEl)  quoteEl.textContent  = '"' + q.q + '"';
-  if (authorEl) authorEl.textContent = q.a;
+  if (authorEl) authorEl.textContent = '';
 
-  // Bacain quote pakai suara (text-to-speech bawaan Android, tanpa file audio)
-  speakQuote(q.q);
+  // Putar rekaman suara asli (MP3) sesuai quote yang kepilih
+  speakQuote(q.audio);
 
   // Generate battery segments
   const TOTAL_SEGMENTS = 20;
@@ -7830,7 +7819,7 @@ function initSplash() {
 
 function closeSplash() {
   clearTimeout(splashTimer);
-  if ('speechSynthesis' in window) speechSynthesis.cancel();
+  if (currentAudioEl) { currentAudioEl.pause(); currentAudioEl = null; }
   if (splashCanvasAnim) cancelAnimationFrame(splashCanvasAnim);
   if (splashPctInterval) cancelAnimationFrame(splashPctInterval);
   const rgbLine = document.getElementById('rgb-line');
