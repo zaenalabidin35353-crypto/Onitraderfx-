@@ -7716,6 +7716,19 @@ function startSplashCanvasAnim() {
 
 let pendingQuoteText = null;
 
+function doSpeakNow(text) {
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.lang = 'id-ID';
+  utter.rate = 0.95;
+  utter.pitch = 1.0;
+  utter.volume = 1;
+  utter.onstart = () => { pendingQuoteText = null; };
+  const voices = speechSynthesis.getVoices();
+  const idVoice = voices.find(v => v.lang === 'id-ID') || voices.find(v => v.lang && v.lang.startsWith('id'));
+  if (idVoice) utter.voice = idVoice;
+  speechSynthesis.speak(utter);
+}
+
 function speakQuote(text) {
   pendingQuoteText = text;
   try {
@@ -7723,45 +7736,32 @@ function speakQuote(text) {
     speechSynthesis.cancel();
     // Jeda dikit setelah cancel() sebelum speak() -- Chrome Android
     // kadang "nelen" suara kalau speak() dipanggil langsung setelah cancel().
+    // Ini cuma buat percobaan OTOMATIS (bukan hasil sentuhan user).
     setTimeout(() => {
-      const utter = new SpeechSynthesisUtterance(text);
-      utter.lang = 'id-ID';
-      utter.rate = 0.95;   // dekat normal, paling wajar didengar
-      utter.pitch = 1.0;   // nada default, paling natural (nggak robotic)
-      utter.volume = 1;
-      let started = false;
-      utter.onstart = () => { started = true; pendingQuoteText = null; };
-      // Coba pakai voice Indonesia kalau ada
-      const setVoice = () => {
-        const voices = speechSynthesis.getVoices();
-        const idVoice = voices.find(v => v.lang === 'id-ID') || voices.find(v => v.lang && v.lang.startsWith('id'));
-        if (idVoice) utter.voice = idVoice;
-        speechSynthesis.speak(utter);
-        // Cek ulang: kalau setelah 400ms belum mulai bicara, coba sekali lagi
-        setTimeout(() => {
-          if (!started) {
-            try { speechSynthesis.cancel(); speechSynthesis.speak(utter); } catch(e) {}
-          }
-        }, 400);
-      };
       if (speechSynthesis.getVoices().length) {
-        setVoice();
+        doSpeakNow(text);
       } else {
-        speechSynthesis.onvoiceschanged = setVoice;
+        speechSynthesis.onvoiceschanged = () => doSpeakNow(text);
       }
     }, 120);
   } catch (e) { /* diam-diam gagal, jangan ganggu splash */ }
 }
 
 // Cadangan: kalau browser blokir suara otomatis (belum ada sentuhan user),
-// begitu layar disentuh sekali, suara langsung dicoba lagi.
+// begitu layar disentuh, suara langsung diputar SAAT ITU JUGA (tanpa jeda),
+// supaya "izin" dari sentuhan user nggak keburu hilang.
 function retrySpeechOnTouch() {
   if (pendingQuoteText && 'speechSynthesis' in window) {
-    speakQuote(pendingQuoteText);
+    const text = pendingQuoteText;
+    try {
+      speechSynthesis.cancel();
+      doSpeakNow(text);
+    } catch (e) { /* abaikan */ }
   }
 }
 document.addEventListener('touchstart', retrySpeechOnTouch, { passive: true });
 document.addEventListener('click', retrySpeechOnTouch);
+
 
 function initSplash() {
   const overlay  = document.getElementById('splash-overlay');
@@ -7772,7 +7772,15 @@ function initSplash() {
   if (!overlay) return;
 
   // Pick random quote
-  const q = QUOTES[Math.floor(Math.random() * QUOTES.length)];
+  let qIdx = Math.floor(Math.random() * QUOTES.length);
+  try {
+    const lastIdx = parseInt(localStorage.getItem('oni_last_quote_idx'), 10);
+    if (!isNaN(lastIdx) && QUOTES.length > 1) {
+      while (qIdx === lastIdx) qIdx = Math.floor(Math.random() * QUOTES.length);
+    }
+    localStorage.setItem('oni_last_quote_idx', qIdx);
+  } catch (e) { /* localStorage nggak tersedia, lanjut aja pakai random biasa */ }
+  const q = QUOTES[qIdx];
   if (quoteEl)  quoteEl.textContent  = '"' + q.q + '"';
   if (authorEl) authorEl.textContent = q.a;
 
