@@ -7721,24 +7721,35 @@ function speakQuote(text) {
   try {
     if (!('speechSynthesis' in window)) return;
     speechSynthesis.cancel();
-    const utter = new SpeechSynthesisUtterance(text);
-    utter.lang = 'id-ID';
-    utter.rate = 0.85;   // pelan, mengalir, nggak terburu-buru
-    utter.pitch = 1.08;  // agak naik dikit biar hangat & lembut
-    utter.volume = 1;
-    utter.onstart = () => { pendingQuoteText = null; };
-    // Coba pakai voice Indonesia kalau ada
-    const setVoice = () => {
-      const voices = speechSynthesis.getVoices();
-      const idVoice = voices.find(v => v.lang === 'id-ID') || voices.find(v => v.lang && v.lang.startsWith('id'));
-      if (idVoice) utter.voice = idVoice;
-      speechSynthesis.speak(utter);
-    };
-    if (speechSynthesis.getVoices().length) {
-      setVoice();
-    } else {
-      speechSynthesis.onvoiceschanged = setVoice;
-    }
+    // Jeda dikit setelah cancel() sebelum speak() -- Chrome Android
+    // kadang "nelen" suara kalau speak() dipanggil langsung setelah cancel().
+    setTimeout(() => {
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.lang = 'id-ID';
+      utter.rate = 0.85;   // pelan, mengalir, nggak terburu-buru
+      utter.pitch = 1.08;  // agak naik dikit biar hangat & lembut
+      utter.volume = 1;
+      let started = false;
+      utter.onstart = () => { started = true; pendingQuoteText = null; };
+      // Coba pakai voice Indonesia kalau ada
+      const setVoice = () => {
+        const voices = speechSynthesis.getVoices();
+        const idVoice = voices.find(v => v.lang === 'id-ID') || voices.find(v => v.lang && v.lang.startsWith('id'));
+        if (idVoice) utter.voice = idVoice;
+        speechSynthesis.speak(utter);
+        // Cek ulang: kalau setelah 400ms belum mulai bicara, coba sekali lagi
+        setTimeout(() => {
+          if (!started) {
+            try { speechSynthesis.cancel(); speechSynthesis.speak(utter); } catch(e) {}
+          }
+        }, 400);
+      };
+      if (speechSynthesis.getVoices().length) {
+        setVoice();
+      } else {
+        speechSynthesis.onvoiceschanged = setVoice;
+      }
+    }, 120);
   } catch (e) { /* diam-diam gagal, jangan ganggu splash */ }
 }
 
@@ -7749,8 +7760,8 @@ function retrySpeechOnTouch() {
     speakQuote(pendingQuoteText);
   }
 }
-document.addEventListener('touchstart', retrySpeechOnTouch, { once: true, passive: true });
-document.addEventListener('click', retrySpeechOnTouch, { once: true });
+document.addEventListener('touchstart', retrySpeechOnTouch, { passive: true });
+document.addEventListener('click', retrySpeechOnTouch);
 
 function initSplash() {
   const overlay  = document.getElementById('splash-overlay');
