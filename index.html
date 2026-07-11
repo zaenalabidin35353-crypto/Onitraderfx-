@@ -7726,8 +7726,8 @@ function speakQuote(text) {
     setTimeout(() => {
       const utter = new SpeechSynthesisUtterance(text);
       utter.lang = 'id-ID';
-      utter.rate = 0.85;   // pelan, mengalir, nggak terburu-buru
-      utter.pitch = 1.08;  // agak naik dikit biar hangat & lembut
+      utter.rate = 0.95;   // dekat normal, paling wajar didengar
+      utter.pitch = 1.0;   // nada default, paling natural (nggak robotic)
       utter.volume = 1;
       let started = false;
       utter.onstart = () => { started = true; pendingQuoteText = null; };
