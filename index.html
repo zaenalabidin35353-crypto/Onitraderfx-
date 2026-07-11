@@ -7719,8 +7719,8 @@ let pendingQuoteText = null;
 function doSpeakNow(text) {
   const utter = new SpeechSynthesisUtterance(text);
   utter.lang = 'id-ID';
-  utter.rate = 0.95;
-  utter.pitch = 1.0;
+  utter.rate = 0.87;   // pelan & mengalir, kesan lembut
+  utter.pitch = 0.95;  // sedikit di bawah normal, kesan tegas/berwibawa
   utter.volume = 1;
   utter.onstart = () => { pendingQuoteText = null; };
   const voices = speechSynthesis.getVoices();
